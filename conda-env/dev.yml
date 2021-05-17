@@ -18,7 +18,7 @@ dependencies:
     - bump2version==1.0.1
     # Quality Assurance
     # ==================
-    # If versions are updated, also update 'rev' in `.pre-commit.config.yaml`
+    # If versions are updated, update 'rev' in `.pre-commit.config.yaml`
     - black=20.8b1
     - flake8=3.8.4
     - flake8-isort=4.0.0
@@ -29,7 +29,8 @@ dependencies:
     - pytest=6.2.2
     - pytest-runner=5.3.0
     - pytest-cov=2.11.1
-    # Developer Tools
+    # Tools
+    # ==================
     - jupyterlab=3.0.12
     # Documentation
     # ==================
