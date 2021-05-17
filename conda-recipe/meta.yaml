@@ -30,6 +30,7 @@ test:
   imports:
     - xcdat
     - xcdat.bounds
+    - xcdat.climatology
     - xcdat.dataset
     - xcdat.logger
     - xcdat.spatial_avg
