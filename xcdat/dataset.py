@@ -167,13 +167,18 @@ def infer_or_keep_var(
 ) -> xr.Dataset:
     """Infer or keep a specific data variable in the Dataset.
 
-    If a ``data_var`` is not specified, this method checks the number of
+    This utility function is useful for allowing the `data_var` kwarg to be
+    optional in XCDAT APIs.
+
+    If a ``data_var`` is not specified, this function checks the number of
     regular (non-bounds) data variables in the Dataset. If there a single
-    regular data variable, then it will add an XCDAT inference tag to it.
+    regular data variable, then it will add an `xcdat_infer` attr pointing
+    to the data variable in the Dataset.
 
     If a ``data_var`` is specified, this method checks if ``data_var`` exists
     in the Dataset and if it is a regular data var. If those checks pass,
-    it will perform the appropriate Dataset subsetting.
+    it will perform the appropriate Dataset subsetting. The 'xcdat_infer' attr
+    pointing to the data variable is also added to the Dataset.
 
     Parameters
     ----------
@@ -202,14 +207,16 @@ def infer_or_keep_var(
 
     if len(regular_vars) == 0:
         logger.warning("This dataset only contains bounds data variables.")
-    elif len(regular_vars) == 1:
-        ds.attrs["xcdat_infer"] = regular_vars[0]
-    elif len(regular_vars) > 1:
-        logger.info(
-            "This dataset contains more than one regular data variable. If "
-            "desired, pass the `data_var` kwarg to reduce down to one regular data var."
-        )
 
+    if data_var is None:
+        if len(regular_vars) == 1:
+            ds.attrs["xcdat_infer"] = regular_vars[0]
+        elif len(regular_vars) > 1:
+            regular_vars_str = ", ".join(f"'{var}'" for var in regular_vars)
+            logger.info(
+                f"This dataset contains more than one regular data variable ({regular_vars_str}). "
+                "If desired, pass the `data_var` kwarg to reduce down to one regular data var."
+            )
     if data_var is not None:
         if data_var not in all_vars:
             raise KeyError(
@@ -328,3 +335,55 @@ def decode_time_units(dataset: xr.Dataset):
 
         dataset = dataset.assign_coords({"time": decoded_time})
     return dataset
+
+
+def get_inferred_var(dataset: xr.Dataset) -> xr.DataArray:
+    """A utility function for getting the xcdat inferred data variable.
+
+    This function looks for the "xcdat_infer" attribute in the Dataset, which
+    can be set in ``open_dataset()``/``open_mf_dataset()`` or manually.
+
+    Parameters
+    ----------
+    dataset : xr.Dataset
+        The Dataset.
+
+    Returns
+    -------
+    xr.DataArray
+        The inferred data variable.
+
+    Raises
+    ------
+    KeyError
+        If the 'xcdat_infer' attr is not set in the Dataset.
+    KeyError
+        If the 'xcdat_infer' attr points to a non-existent data var.
+    KeyError
+        If the 'xcdat_infer' attr points to a bounds data var.
+    """
+    inferred_var = dataset.attrs.get("xcdat_infer", None)
+    bounds_vars = dataset.bounds.names
+
+    if inferred_var is None:
+        raise KeyError(
+            "No 'xcdat_infer' attr found in the Dataset, cannot infer the desired "
+            "data variable for this operation. You must pass the `data_var` kwarg to "
+            "this operation."
+        )
+    else:
+        data_var = dataset.get(inferred_var, None)
+        if data_var is None:
+            raise KeyError(
+                f"Dataset attr 'xcdat_infer' set to non-existent data variable, '{inferred_var}'. "
+                "Either pass the `data_var` kwarg to this operation, or set `xcdat_infer` "
+                "to a regular (non-bounds) data variable."
+            )
+        if inferred_var in bounds_vars:
+            raise KeyError(
+                f"Dataset attr `xcdat_infer` set to the bounds data variable, '{inferred_var}'. "
+                "Either pass the `data_var` kwarg, or set `xcdat_infer` to a regular "
+                "(non-bounds) data variable."
+            )
+
+        return data_var.copy()

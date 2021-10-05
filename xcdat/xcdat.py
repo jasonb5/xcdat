@@ -33,8 +33,8 @@ class XCDATAccessor:
 
     def spatial_avg(
         self,
-        data_var_name: str,
-        axis: Union[List[SupportedAxes], SupportedAxes],
+        data_var: Optional[str] = None,
+        axis: Union[List[SupportedAxes], SupportedAxes] = ["lat", "lon"],
         weights: xr.DataArray = None,
         lat_bounds: Optional[RegionAxisBounds] = None,
         lon_bounds: Optional[RegionAxisBounds] = None,
@@ -58,9 +58,10 @@ class XCDATAccessor:
 
         Parameters
         ----------
-        data_var_name: str
+        data_var: Optional[str], optional
             The name of the data variable inside the dataset to spatially
-            average.
+            average. If None, an inference to the desired data variable is
+            attempted using the Dataset's "xcdat_infer" attr, by default None.
         axis : Union[List[SupportedAxes], SupportedAxes]
             List of axis dimensions or single axes dimension to average over.
             For example, ["lat", "lon"]  or "lat", by default ["lat", "lon"].
@@ -134,7 +135,7 @@ class XCDATAccessor:
         >>>     weights=weights)["tas"]
         """
         obj = DatasetSpatialAverageAccessor(self._dataset)
-        return obj.avg(data_var_name, axis, weights, lat_bounds, lon_bounds)
+        return obj.avg(data_var, axis, weights, lat_bounds, lon_bounds)
 
     @property
     def bounds(self) -> Dict[str, Optional[xr.DataArray]]:

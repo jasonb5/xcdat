@@ -62,6 +62,27 @@ class TestSpatialAverage:
                 lon_bounds=[-170, -120.1],
             )
 
+    def test_weighted_spatial_average_for_lat_and_lon_region_for_an_inferred_data_var(
+        self,
+    ):
+        ds = self.ds.copy()
+        ds.attrs["xcdat_infer"] = "ts"
+
+        # `data_var` kwarg is not specified, so an inference is attempted
+        result = ds.spatial.avg(
+            axis=["lat", "lon"], lat_bounds=(-5.0, 5), lon_bounds=(-170, -120.1)
+        )
+
+        expected = self.ds.copy()
+        expected.attrs["xcdat_infer"] = "ts"
+        expected["ts"] = xr.DataArray(
+            data=np.array([2.25, 1.0, 1.0]),
+            coords={"time": expected.time},
+            dims="time",
+        )
+
+        assert result.identical(expected)
+
     def test_weighted_spatial_average_for_lat_and_lon_region(self):
         ds = self.ds.copy()
         result = ds.spatial.avg(
@@ -69,6 +90,7 @@ class TestSpatialAverage:
         )
 
         expected = self.ds.copy()
+
         expected["ts"] = xr.DataArray(
             data=np.array([2.25, 1.0, 1.0]),
             coords={"time": expected.time},

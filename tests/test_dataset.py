@@ -8,6 +8,7 @@ import xarray as xr
 from tests.fixtures import generate_dataset
 from xcdat.dataset import (
     decode_time_units,
+    get_inferred_var,
     infer_or_keep_var,
     open_dataset,
     open_mfdataset,
@@ -407,7 +408,7 @@ class TestInferOrKeepVar:
         assert result.identical(expected)
         assert result.attrs.get("xcdat_infer") is None
         assert (
-            "This dataset contains more than one regular data variable. If "
+            "This dataset contains more than one regular data variable ('tas', 'ts'). If "
             "desired, pass the `data_var` kwarg to reduce down to one regular data var."
         ) in caplog.text
 
@@ -424,3 +425,36 @@ class TestInferOrKeepVar:
         assert ds.get("lat_bnds") is not None
         assert ds.get("lon_bnds") is not None
         assert ds.get("time_bnds") is not None
+
+
+class TestGetInferredVar:
+    @pytest.fixture(autouse=True)
+    def setup(self):
+        self.ds = generate_dataset(cf_compliant=True, has_bounds=True)
+
+    def test_raises_error_if_inference_tag_is_none(self):
+        with pytest.raises(KeyError):
+            get_inferred_var(self.ds)
+
+    def test_raises_error_if_inference_tag_is_set_to_nonexistent_data_var(self):
+        ds = self.ds.copy()
+        ds.attrs["xcdat_infer"] = "nonexistent_var"
+
+        with pytest.raises(KeyError):
+            get_inferred_var(ds)
+
+    def test_raises_error_if_inference_tag_is_set_to_bounds_var(self):
+        ds = self.ds.copy()
+        ds.attrs["xcdat_infer"] = "lat_bnds"
+
+        with pytest.raises(KeyError):
+            get_inferred_var(ds)
+
+    def test_returns_inferred_data_var(self):
+        ds = self.ds.copy()
+        ds.attrs["xcdat_infer"] = "ts"
+
+        result = get_inferred_var(ds)
+        expected = ds.ts
+
+        assert result.identical(expected)
