@@ -86,12 +86,14 @@ class DatasetBoundsAccessor:
         List[str]
             Bounds data variable names.
         """
-        return list(
-            {
-                name
-                for bound_names in self._dataset.cf.bounds.values()
-                for name in bound_names
-            }
+        return sorted(
+            list(
+                {
+                    name
+                    for bound_names in self._dataset.cf.bounds.values()
+                    for name in bound_names
+                }
+            )
         )
 
     def fill_missing(self) -> xr.Dataset:
