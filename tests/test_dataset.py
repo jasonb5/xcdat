@@ -1,3 +1,4 @@
+import logging
 import warnings
 
 import numpy as np
@@ -5,7 +6,15 @@ import pytest
 import xarray as xr
 
 from tests.fixtures import generate_dataset
-from xcdat.dataset import decode_time_units, keep_var, open_dataset, open_mfdataset
+from xcdat.dataset import (
+    decode_time_units,
+    infer_or_keep_var,
+    open_dataset,
+    open_mfdataset,
+)
+from xcdat.logger import setup_custom_logger
+
+logger = setup_custom_logger("xcdat.dataset", propagate=True)
 
 
 class TestOpenDataset:
@@ -31,8 +40,10 @@ class TestOpenDataset:
             warnings.simplefilter("ignore")
             ds_mod.to_netcdf(self.file_path)
 
-        result_ds = open_dataset(self.file_path, var="ts")
-        assert result_ds.identical(ds)
+        result_ds = open_dataset(self.file_path, data_var="ts")
+        expected = ds.copy()
+        expected.attrs["xcdat_infer"] = "ts"
+        assert result_ds.identical(expected)
 
     def test_non_cf_compliant_time_is_decoded(self):
         # Generate dummy datasets with non-CF compliant time units that aren't
@@ -40,7 +51,7 @@ class TestOpenDataset:
         ds = generate_dataset(cf_compliant=False, has_bounds=False)
         ds.to_netcdf(self.file_path)
 
-        result_ds = open_dataset(self.file_path, var="ts")
+        result_ds = open_dataset(self.file_path, data_var="ts")
         # Replicates decode_times=False, which adds units to "time" coordinate.
         # Refer to xcdat.bounds.DatasetBoundsAccessor._add_bounds() for
         # how attributes propagate from coord to coord bounds.
@@ -49,6 +60,7 @@ class TestOpenDataset:
         # Generate an expected dataset with non-CF compliant time units that are
         # manually encoded
         expected_ds = generate_dataset(cf_compliant=True, has_bounds=True)
+        expected_ds.attrs["xcdat_infer"] = "ts"
         expected_ds.time.attrs["units"] = "months since 2000-01-01"
         expected_ds.time_bnds.attrs["units"] = "months since 2000-01-01"
         expected_ds.time.encoding = {
@@ -63,18 +75,19 @@ class TestOpenDataset:
         assert result_ds.identical(expected_ds)
 
     def test_preserves_lat_and_lon_bounds_if_they_exist(self):
-        # Create expected dataset which includes bounds.
-        expected_ds = generate_dataset(cf_compliant=True, has_bounds=True)
+        ds = generate_dataset(cf_compliant=True, has_bounds=True)
 
         # Suppress UserWarning regarding missing time.encoding "units" because
         # it is not relevant to this test.
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            expected_ds.to_netcdf(self.file_path)
+            ds.to_netcdf(self.file_path)
 
-        # Check resulting dataset and expected are identical
-        result_ds = open_dataset(self.file_path, var="ts")
-        assert result_ds.identical(expected_ds)
+        result_ds = open_dataset(self.file_path, data_var="ts")
+        expected = ds.copy()
+        expected.attrs["xcdat_infer"] = "ts"
+
+        assert result_ds.identical(expected)
 
     def test_generates_lat_and_lon_bounds_if_they_dont_exist(self):
         # Create expected dataset without bounds.
@@ -87,7 +100,7 @@ class TestOpenDataset:
         assert "lon_bnds" not in data_vars
 
         # Check bounds were generated.
-        result = open_dataset(self.file_path, var="ts")
+        result = open_dataset(self.file_path, data_var="ts")
         result_data_vars = list(result.data_vars.keys())
         assert "lat_bnds" in result_data_vars
         assert "lon_bnds" in result_data_vars
@@ -112,7 +125,7 @@ class TestOpenMfDataset:
         ds2 = ds2.rename_vars({"ts": "tas"})
         ds2.to_netcdf(self.file_path2)
 
-        result_ds = open_mfdataset([self.file_path1, self.file_path2], var="ts")
+        result_ds = open_mfdataset([self.file_path1, self.file_path2], data_var="ts")
 
         # Replicates decode_times=False, which adds units to "time" coordinate.
         # Refer to xcdat.bounds.DatasetBoundsAccessor._add_bounds() for
@@ -122,6 +135,7 @@ class TestOpenMfDataset:
         # Generate an expected dataset, which is a combination of both datasets
         # with decoded time units and coordinate bounds.
         expected_ds = generate_dataset(cf_compliant=True, has_bounds=True)
+        expected_ds.attrs["xcdat_infer"] = "ts"
         expected_ds.time.attrs["units"] = "months since 2000-01-01"
         expected_ds.time_bnds.attrs["units"] = "months since 2000-01-01"
         expected_ds.time.encoding = {
@@ -143,7 +157,7 @@ class TestOpenMfDataset:
         ds2 = ds2.rename_vars({"ts": "tas"})
         ds2.to_netcdf(self.file_path2)
 
-        result_ds = open_mfdataset([self.file_path1, self.file_path2], var="ts")
+        result_ds = open_mfdataset([self.file_path1, self.file_path2], data_var="ts")
         # Replicates decode_times=False, which adds units to "time" coordinate.
         # Refer to xcdat.bounds.DatasetBoundsAccessor._add_bounds() for
         # how attributes propagate from coord to coord bounds.
@@ -152,6 +166,7 @@ class TestOpenMfDataset:
         # Generate an expected dataset, which is a combination of both datasets
         # with decoded time units and coordinate bounds.
         expected_ds = generate_dataset(cf_compliant=True, has_bounds=True)
+        expected_ds.attrs["xcdat_infer"] = "ts"
         expected_ds.time.attrs["units"] = "months since 2000-01-01"
         expected_ds.time_bnds.attrs["units"] = "months since 2000-01-01"
         expected_ds.time.encoding = {
@@ -180,9 +195,9 @@ class TestOpenMfDataset:
 
         # Generate expected dataset, which is a combination of the two datasets.
         expected_ds = generate_dataset(cf_compliant=True, has_bounds=True)
-
+        expected_ds.attrs["xcdat_infer"] = "ts"
         # Check that the result is identical to the expected.
-        result_ds = open_mfdataset([self.file_path1, self.file_path2], var="ts")
+        result_ds = open_mfdataset([self.file_path1, self.file_path2], data_var="ts")
         assert result_ds.identical(expected_ds)
 
     def test_generates_lat_and_lon_bounds_if_they_dont_exist(self):
@@ -201,7 +216,7 @@ class TestOpenMfDataset:
         assert "lon_bnds" not in data_vars1 + data_vars2
 
         # Check that bounds were generated.
-        result = open_dataset(self.file_path1, var="ts")
+        result = open_dataset(self.file_path1, data_var="ts")
         result_data_vars = list(result.data_vars.keys())
         assert "lat_bnds" in result_data_vars
         assert "lon_bnds" in result_data_vars
@@ -346,7 +361,7 @@ class TestDecodeTimeUnits:
         assert result_ds.time.encoding == expected_ds.time.encoding
 
 
-class TestKeepVars:
+class TestInferOrKeepVar:
     @pytest.fixture(autouse=True)
     def setup(self):
         self.ds = generate_dataset(cf_compliant=True, has_bounds=True)
@@ -354,18 +369,58 @@ class TestKeepVars:
         self.ds_mod = self.ds.copy()
         self.ds_mod["tas"] = self.ds_mod.ts.copy()
 
-    def test_only_keeps_specified_var(self):
-        ds = keep_var(self.ds_mod, var="ts")
+    def tests_raises_logger_warning_if_only_bounds_data_variables_exist(self, caplog):
+        caplog.set_level(logging.WARNING)
 
-        assert ds.identical(self.ds)
-        assert not ds.identical(self.ds_mod)
+        ds = self.ds.copy()
+        ds = ds.drop_vars("ts")
 
-    def test_raises_error_if_var_does_not_exist_in_dataset(self):
+        infer_or_keep_var(ds)
+        assert "This dataset only contains bounds data variables." in caplog.text
+
+    def test_raises_error_if_specified_data_var_does_not_exist(self):
         with pytest.raises(KeyError):
-            keep_var(self.ds_mod, var="nonexistent")
+            infer_or_keep_var(self.ds_mod, data_var="nonexistent")
 
-    def test_always_keeps_bounds(self):
-        ds = keep_var(self.ds_mod, var="ts")
+    def test_raises_error_if_specified_data_var_is_a_bounds_var(self):
+        with pytest.raises(KeyError):
+            infer_or_keep_var(self.ds_mod, data_var="lat_bnds")
+
+    def test_returns_dataset_if_it_only_has_one_non_bounds_data_var(self):
+        ds = self.ds.copy()
+
+        result = infer_or_keep_var(ds, data_var=None)
+        expected = ds.copy()
+        expected.attrs["xcdat_infer"] = "ts"
+
+        assert result.identical(expected)
+
+    def test_returns_dataset_if_it_contains_multiple_non_bounds_data_var_with_logger_msg(
+        self, caplog
+    ):
+        caplog.set_level(logging.INFO)
+
+        ds = self.ds_mod.copy()
+        result = infer_or_keep_var(ds, data_var=None)
+        expected = ds
+
+        assert result.identical(expected)
+        assert result.attrs.get("xcdat_infer") is None
+        assert (
+            "This dataset contains more than one regular data variable. If "
+            "desired, pass the `data_var` kwarg to reduce down to one regular data var."
+        ) in caplog.text
+
+    def test_returns_dataset_with_specified_data_var_and_xcdat_infer_tag(self):
+        result = infer_or_keep_var(self.ds_mod, data_var="ts")
+        expected = self.ds.copy()
+        expected.attrs["xcdat_infer"] = "ts"
+
+        assert result.identical(expected)
+        assert not result.identical(self.ds_mod)
+
+    def test_bounds_always_persist(self):
+        ds = infer_or_keep_var(self.ds_mod, data_var="ts")
         assert ds.get("lat_bnds") is not None
         assert ds.get("lon_bnds") is not None
         assert ds.get("time_bnds") is not None

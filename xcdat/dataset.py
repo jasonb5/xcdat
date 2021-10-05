@@ -1,13 +1,18 @@
 """Dataset module for functions related to an xarray.Dataset."""
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, Hashable, List, Optional, Union
 
 import pandas as pd
 import xarray as xr
 
 from xcdat import bounds  # noqa: F401
+from xcdat.logger import setup_custom_logger
+
+logger = setup_custom_logger(__name__)
 
 
-def open_dataset(path: str, var: str, **kwargs: Dict[str, Any]) -> xr.Dataset:
+def open_dataset(
+    path: str, data_var: Optional[str] = None, **kwargs: Dict[str, Any]
+) -> xr.Dataset:
     """Wrapper for ``xarray.open_dataset`` that applies common operations.
 
     Operations include:
@@ -15,15 +20,15 @@ def open_dataset(path: str, var: str, **kwargs: Dict[str, Any]) -> xr.Dataset:
     - If the dataset a time dimension, decode both CF and non-CF time units
       (months and years).
     - Generate bounds for supported coordinates if they don't exist.
-    - Limit the Dataset to a single variable. XCDAT operations are performed on
-      a single variable.
+    - Limit the Dataset to a single variable, since XCDAT operations are
+      performed on a single variable at a time.
 
     Parameters
     ----------
     path : str
         Path to Dataset.
-    var: str
-        The variable to keep in the Dataset.
+    data_var: Optional[str], optional
+        The data variable to keep in the Dataset, by default None.
     kwargs : Dict[str, Any]
         Additional arguments passed on to ``xarray.open_dataset``.
 
@@ -68,7 +73,7 @@ def open_dataset(path: str, var: str, **kwargs: Dict[str, Any]) -> xr.Dataset:
     # NOTE: Using decode_times=False may add incorrect units for existing time
     # bounds (becomes "days since 1970-01-01  00:00:00").
     ds = xr.open_dataset(path, decode_times=False, **kwargs)
-    ds = keep_var(ds, var)
+    ds = infer_or_keep_var(ds, data_var)
 
     if ds.cf.dims.get("T") is not None:
         ds = decode_time_units(ds)
@@ -78,7 +83,9 @@ def open_dataset(path: str, var: str, **kwargs: Dict[str, Any]) -> xr.Dataset:
 
 
 def open_mfdataset(
-    paths: Union[str, List[str]], var: str, **kwargs: Dict[str, Any]
+    paths: Union[str, List[str]],
+    data_var: Optional[str] = None,
+    **kwargs: Dict[str, Any],
 ) -> xr.Dataset:
     """Wrapper for ``xarray.open_mfdataset`` that applies common operations.
 
@@ -98,8 +105,8 @@ def open_mfdataset(
         pathlib Paths. If concatenation along more than one dimension is desired,
         then ``paths`` must be a nested list-of-lists (see ``combine_nested``
         for details). (A string glob will be expanded to a 1-dimensional list.)
-    var: str
-        The variable to keep in the Dataset.
+    data_var: Optional[str], optional
+        The data variable to keep in the Dataset, by default None.
     kwargs : Dict[str, Any]
         Additional arguments passed on to ``xarray.open_mfdataset`` and/or
         ``xarray.open_dataset``.
@@ -146,12 +153,74 @@ def open_mfdataset(
     # NOTE: Using decode_times=False may add incorrect units for existing time
     # bounds (becomes "days since 1970-01-01  00:00:00").
     ds = xr.open_mfdataset(paths, decode_times=False, **kwargs)
-    ds = keep_var(ds, var)
+    ds = infer_or_keep_var(ds, data_var)
 
     if ds.cf.dims.get("T") is not None:
         ds = decode_time_units(ds)
 
     ds = ds.bounds.fill_missing()
+    return ds
+
+
+def infer_or_keep_var(
+    dataset: xr.Dataset, data_var: Optional[str] = None
+) -> xr.Dataset:
+    """Infer or keep a specific data variable in the Dataset.
+
+    If a ``data_var`` is not specified, this method checks the number of
+    regular (non-bounds) data variables in the Dataset. If there a single
+    regular data variable, then it will add an XCDAT inference tag to it.
+
+    If a ``data_var`` is specified, this method checks if ``data_var`` exists
+    in the Dataset and if it is a regular data var. If those checks pass,
+    it will perform the appropriate Dataset subsetting.
+
+    Parameters
+    ----------
+    dataset : xr.Dataset
+        The Dataset.
+    data_var: Optional[str], optional
+        The regular data variable to keep in the Dataset, by default None.
+
+    Returns
+    -------
+    xr.Dataset
+        The Dataset.
+
+    Raises
+    ------
+    KeyError
+        If the specified data variable is not found in the Dataset.
+    KeyError
+        If the user specifies a bounds variable to keep (this method does that
+        by default).
+    """
+    ds = dataset.copy()
+    all_vars = ds.data_vars.keys()
+    bounds_vars = ds.bounds.names
+    regular_vars: List[Hashable] = list(set(all_vars) ^ set(bounds_vars))
+
+    if len(regular_vars) == 0:
+        logger.warning("This dataset only contains bounds data variables.")
+    elif len(regular_vars) == 1:
+        ds.attrs["xcdat_infer"] = regular_vars[0]
+    elif len(regular_vars) > 1:
+        logger.info(
+            "This dataset contains more than one regular data variable. If "
+            "desired, pass the `data_var` kwarg to reduce down to one regular data var."
+        )
+
+    if data_var is not None:
+        if data_var not in all_vars:
+            raise KeyError(
+                f"The data variable '{data_var}' does not exist in the dataset."
+            )
+        if data_var in bounds_vars:
+            raise KeyError("Please specify a regular (non-bounds) data variable.")
+
+        ds = dataset[[data_var] + bounds_vars]
+        ds.attrs["xcdat_infer"] = data_var
+
     return ds
 
 
@@ -259,41 +328,3 @@ def decode_time_units(dataset: xr.Dataset):
 
         dataset = dataset.assign_coords({"time": decoded_time})
     return dataset
-
-
-def keep_var(dataset: xr.Dataset, var: str) -> xr.Dataset:
-    """Keep a specific variable in the Dataset and drop the rest.
-
-    This function is useful for subsetting a Dataset with a large number of
-    variables that aren't of interest, which could otherwise hinder performance
-    in Dataset operations.
-
-    Parameters
-    ----------
-    dataset : xr.Dataset
-        The Dataset.
-    var: str
-        The variable to keep in the Dataset.
-
-    Returns
-    -------
-    xr.Dataset
-        The Dataset with a subset of variables.
-
-    Raises
-    ------
-    KeyError
-        If the specified variable is not found in the Dataset.
-    """
-    if var not in dataset.data_vars.keys():
-        raise KeyError(f"The data variable {var} does not exist in the dataset.")
-
-    # dataset.cf.bounds.values() returns multiple keys corresponding to an axis,
-    # which means the keys for bounds are repeated in the flattened list.
-    keep_bounds = list(
-        {name for bound_names in dataset.cf.bounds.values() for name in bound_names}
-    )
-
-    # xarray is smart enough to ignore repeated keys.
-    ds = dataset[[var] + keep_bounds]
-    return ds
