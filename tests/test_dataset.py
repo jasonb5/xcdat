@@ -462,6 +462,6 @@ class TestGetInferredVar:
 
         assert result.identical(expected)
         assert (
-            "The data variable 'ts' was inferred for this operation from "
-            "the Dataset attr, 'xcdat_infer'."
+            "The data variable 'ts' was inferred from the Dataset attr 'xcdat_infer' "
+            "for this operation."
         ) in caplog.text

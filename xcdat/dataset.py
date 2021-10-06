@@ -398,7 +398,7 @@ def get_inferred_var(dataset: xr.Dataset) -> xr.DataArray:
             )
 
         logger.info(
-            f"The data variable '{data_var.name}' was inferred for this operation from "
-            "the Dataset attr, 'xcdat_infer'."
+            f"The data variable '{data_var.name}' was inferred from the Dataset attr "
+            "'xcdat_infer' for this operation."
         )
         return data_var.copy()
