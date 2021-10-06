@@ -13,15 +13,15 @@ logger = setup_custom_logger(__name__)
 def open_dataset(
     path: str, data_var: Optional[str] = None, **kwargs: Dict[str, Any]
 ) -> xr.Dataset:
-    """Wrapper for ``xarray.open_dataset`` that applies common operations.
+    """Wrapper for ``xarray.open_dataset()`` that applies common operations.
 
     Operations include:
 
-    - If the dataset a time dimension, decode both CF and non-CF time units
+    - If the dataset has a time dimension, decode both CF and non-CF time units
       (months and years).
     - Generate bounds for supported coordinates if they don't exist.
-    - Limit the Dataset to a single variable, since XCDAT operations are
-      performed on a single variable at a time.
+    - Option to limit the Dataset to a single regular (non-bounds) data
+      variable while retaining any bounds data variables.
 
     Parameters
     ----------
@@ -87,16 +87,15 @@ def open_mfdataset(
     data_var: Optional[str] = None,
     **kwargs: Dict[str, Any],
 ) -> xr.Dataset:
-    """Wrapper for ``xarray.open_mfdataset`` that applies common operations.
+    """Wrapper for ``xarray.open_mfdataset()`` that applies common operations.
 
     Operations include:
 
-    - If the dataset a time dimension, decode both CF and non-CF time units
+    - If the dataset has a time dimension, decode both CF and non-CF time units
       (months and years).
     - Generate bounds for supported coordinates if they don't exist.
-    - Limit the Dataset to a single variable. XCDAT operations are performed on
-      a single variable.
-
+    - Option to limit the Dataset to a single regular (non-bounds) data
+      variable while retaining any bounds data variables.
     Parameters
     ----------
     path : Union[str, List[str]]
@@ -165,20 +164,23 @@ def open_mfdataset(
 def infer_or_keep_var(
     dataset: xr.Dataset, data_var: Optional[str] = None
 ) -> xr.Dataset:
-    """Infer or keep a specific data variable in the Dataset.
+    """Infer the data variable(s) or keep a specific one in the Dataset.
 
-    This utility function is useful for allowing the `data_var` kwarg to be
-    optional in XCDAT APIs.
+    If ``data_var`` is None, then this function checks the number of
+    regular (non-bounds) data variables in the Dataset. If there is a single
+    regular data var, then it will add an 'xcdat_infer' attr pointing to it in
+    the Dataset. XCDAT APIs can call `get_inferred_var()` to get the data var
+    linked to the 'xcdat_infer' attr.
 
-    If a ``data_var`` is not specified, this function checks the number of
-    regular (non-bounds) data variables in the Dataset. If there a single
-    regular data variable, then it will add an `xcdat_infer` attr pointing
-    to the data variable in the Dataset.
+    If ``data_var`` is not None, then this function checks if the ``data_var``
+    exists in the Dataset and if it is a regular data var. If those checks pass,
+    it will subset the Dataset to retain that ``data_var`` and any bounds data
+    vars. The 'xcdat_infer' attr  pointing to the data variable is also added
+    to the Dataset.
 
-    If a ``data_var`` is specified, this method checks if ``data_var`` exists
-    in the Dataset and if it is a regular data var. If those checks pass,
-    it will perform the appropriate Dataset subsetting. The 'xcdat_infer' attr
-    pointing to the data variable is also added to the Dataset.
+    This utility function is useful for designing XCDAT APIs with an optional
+    ``data_var`` kwarg to allow implicit (``data_var=None``) or explicit
+    (``data_var='a_var'``) selection of a data var to perform an operation on.
 
     Parameters
     ----------
@@ -197,8 +199,7 @@ def infer_or_keep_var(
     KeyError
         If the specified data variable is not found in the Dataset.
     KeyError
-        If the user specifies a bounds variable to keep (this method does that
-        by default).
+        If the user specifies a bounds variable to keep.
     """
     ds = dataset.copy()
     all_vars = ds.data_vars.keys()
@@ -338,10 +339,16 @@ def decode_time_units(dataset: xr.Dataset):
 
 
 def get_inferred_var(dataset: xr.Dataset) -> xr.DataArray:
-    """A utility function for getting the xcdat inferred data variable.
+    """Gets the inferred data variable that is tagged in the Dataset.
 
-    This function looks for the "xcdat_infer" attribute in the Dataset, which
-    can be set in ``open_dataset()``/``open_mf_dataset()`` or manually.
+    This function looks for the "xcdat_infer" attribute pointing
+    to the desired data var in the Dataset, which can be set through
+    ``xcdat.open_dataset()``, ``xcdat.open_mf_dataset()``, or manually.
+
+    This utility function is useful for designing XCDAT APIs with an optional
+    ``data_var`` kwarg to allow implicit (``data_var=None``, calls this
+    function) or explicit (``data_var='a_var'``) selection of a data var to
+    perform the operation on.
 
     Parameters
     ----------
@@ -376,13 +383,13 @@ def get_inferred_var(dataset: xr.Dataset) -> xr.DataArray:
         if data_var is None:
             raise KeyError(
                 f"Dataset attr 'xcdat_infer' set to non-existent data variable, '{inferred_var}'. "
-                "Either pass the `data_var` kwarg to this operation, or set `xcdat_infer` "
+                "Either pass the `data_var` kwarg to this operation, or set 'xcdat_infer' "
                 "to a regular (non-bounds) data variable."
             )
         if inferred_var in bounds_vars:
             raise KeyError(
                 f"Dataset attr `xcdat_infer` set to the bounds data variable, '{inferred_var}'. "
-                "Either pass the `data_var` kwarg, or set `xcdat_infer` to a regular "
+                "Either pass the `data_var` kwarg, or set 'xcdat_infer' to a regular "
                 "(non-bounds) data variable."
             )
 
