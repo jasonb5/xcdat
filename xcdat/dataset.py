@@ -378,23 +378,26 @@ def get_inferred_var(dataset: xr.Dataset) -> xr.DataArray:
 
     if inferred_var is None:
         raise KeyError(
-            "'xcdat_infer' attr not set in the Dataset. Cannot infer the desired "
-            "data variable for this operation. You must pass the `data_var` kwarg to "
-            "this operation."
+            "'xcdat_infer' attr is not set in the Dataset. Cannot infer the desired "
+            "data variable, so you must pass `data_var` kwarg to this operation."
         )
     else:
         data_var = dataset.get(inferred_var, None)
         if data_var is None:
             raise KeyError(
-                f"Dataset attr 'xcdat_infer' set to non-existent data variable, '{inferred_var}'. "
-                "Either pass the `data_var` kwarg to this operation, or set 'xcdat_infer' "
-                "to a regular (non-bounds) data variable."
+                "Dataset attr 'xcdat_infer'is set to non-existent data variable, "
+                f"'{inferred_var}'. Either pass the `data_var` kwarg to this operation, "
+                "or set 'xcdat_infer' to a regular (non-bounds) data variable."
             )
         if inferred_var in bounds_vars:
             raise KeyError(
-                f"Dataset attr `xcdat_infer` set to the bounds data variable, '{inferred_var}'. "
-                "Either pass the `data_var` kwarg, or set 'xcdat_infer' to a regular "
-                "(non-bounds) data variable."
+                "Dataset attr `xcdat_infer` is set to the bounds data variable, "
+                f"'{inferred_var}'. Either pass the `data_var` kwarg, or set "
+                "'xcdat_infer' to a regular (non-bounds) data variable."
             )
 
+        logger.info(
+            f"The data variable '{data_var.name}' was inferred for this operation from "
+            "the Dataset attr, 'xcdat_infer'."
+        )
         return data_var.copy()

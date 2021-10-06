@@ -403,13 +403,14 @@ class TestInferOrKeepVar:
 
         ds = self.ds_mod.copy()
         result = infer_or_keep_var(ds, data_var=None)
-        expected = ds
+        expected = ds.copy()
+        expected.attrs["xcdat_infer"] = None
 
         assert result.identical(expected)
         assert result.attrs.get("xcdat_infer") is None
         assert (
-            "This dataset contains more than one regular data variable ('ts', 'tas'). If "
-            "desired, pass the `data_var` kwarg to reduce down to one regular data var."
+            "This dataset contains more than one regular data variable ('ts', 'tas'). "
+            "If desired, pass the `data_var` kwarg to reduce down to one regular data var."
         ) in caplog.text
 
     def test_returns_dataset_with_specified_data_var_and_xcdat_infer_tag(self):
@@ -450,7 +451,9 @@ class TestGetInferredVar:
         with pytest.raises(KeyError):
             get_inferred_var(ds)
 
-    def test_returns_inferred_data_var(self):
+    def test_returns_inferred_data_var(self, caplog):
+        caplog.set_level(logging.INFO)
+
         ds = self.ds.copy()
         ds.attrs["xcdat_infer"] = "ts"
 
@@ -458,3 +461,7 @@ class TestGetInferredVar:
         expected = ds.ts
 
         assert result.identical(expected)
+        assert (
+            "The data variable 'ts' was inferred for this operation from "
+            "the Dataset attr, 'xcdat_infer'."
+        ) in caplog.text
