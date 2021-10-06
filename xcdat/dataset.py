@@ -202,6 +202,10 @@ def infer_or_keep_var(
         If the user specifies a bounds variable to keep.
     """
     ds = dataset.copy()
+    # Make sure this attribute is None because the output Dataset may be
+    # written to a file, which includes "xcdat_infer" already set.
+    ds.attrs["xcdat_infer"] = None
+
     all_vars = ds.data_vars.keys()
     bounds_vars = ds.bounds.names
     regular_vars: List[Hashable] = list(set(all_vars) ^ set(bounds_vars))
@@ -374,7 +378,7 @@ def get_inferred_var(dataset: xr.Dataset) -> xr.DataArray:
 
     if inferred_var is None:
         raise KeyError(
-            "No 'xcdat_infer' attr found in the Dataset, cannot infer the desired "
+            "'xcdat_infer' attr not set in the Dataset. Cannot infer the desired "
             "data variable for this operation. You must pass the `data_var` kwarg to "
             "this operation."
         )
