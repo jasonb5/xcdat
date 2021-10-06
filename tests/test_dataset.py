@@ -409,7 +409,7 @@ class TestInferOrKeepVar:
         assert result.identical(expected)
         assert result.attrs.get("xcdat_infer") is None
         assert (
-            "This dataset contains more than one regular data variable ('ts', 'tas'). "
+            "This dataset contains more than one regular data variable ('tas', 'ts'). "
             "If desired, pass the `data_var` kwarg to reduce down to one regular data var."
         ) in caplog.text
 

@@ -217,7 +217,9 @@ def infer_or_keep_var(
         if len(regular_vars) == 1:
             ds.attrs["xcdat_infer"] = regular_vars[0]
         elif len(regular_vars) > 1:
-            regular_vars_str = ", ".join(f"'{var}'" for var in regular_vars)
+            regular_vars_str = ", ".join(
+                f"'{var}'" for var in sorted(regular_vars)  # type:ignore
+            )
             logger.info(
                 "This dataset contains more than one regular data variable "
                 f"({regular_vars_str}). If desired, pass the `data_var` kwarg to "
