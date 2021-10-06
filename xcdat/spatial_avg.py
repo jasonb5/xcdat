@@ -52,7 +52,8 @@ class DatasetSpatialAverageAccessor:
         data_var: Optional[str], optional
             The name of the data variable inside the dataset to spatially
             average. If None, an inference to the desired data variable is
-            attempted using the Dataset's "xcdat_infer" attr, by default None.
+            attempted with the Dataset's "xcdat_infer" attr and
+            ``get_inferred_var()``, by default None.
         axis : Union[List[SupportedAxes], SupportedAxes]
             List of axis dimensions or single axes dimension to average over.
             For example, ["lat", "lon"]  or "lat", by default ["lat", "lon"].

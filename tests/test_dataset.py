@@ -413,7 +413,7 @@ class TestInferOrKeepVar:
             "If desired, pass the `data_var` kwarg to reduce down to one regular data var."
         ) in caplog.text
 
-    def test_returns_dataset_with_specified_data_var_and_xcdat_infer_tag(self):
+    def test_returns_dataset_with_specified_data_var_and_inference_attr(self):
         result = infer_or_keep_var(self.ds_mod, data_var="ts")
         expected = self.ds.copy()
         expected.attrs["xcdat_infer"] = "ts"
