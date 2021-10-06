@@ -219,8 +219,9 @@ def infer_or_keep_var(
         elif len(regular_vars) > 1:
             regular_vars_str = ", ".join(f"'{var}'" for var in regular_vars)
             logger.info(
-                f"This dataset contains more than one regular data variable ({regular_vars_str}). "
-                "If desired, pass the `data_var` kwarg to reduce down to one regular data var."
+                "This dataset contains more than one regular data variable "
+                f"({regular_vars_str}). If desired, pass the `data_var` kwarg to "
+                "reduce down to one regular data var."
             )
     if data_var is not None:
         if data_var not in all_vars:
@@ -378,8 +379,8 @@ def get_inferred_var(dataset: xr.Dataset) -> xr.DataArray:
 
     if inferred_var is None:
         raise KeyError(
-            "'xcdat_infer' attr is not set in the Dataset. Cannot infer the desired "
-            "data variable, so you must pass `data_var` kwarg to this operation."
+            "Dataset attr 'xcdat_infer' is not set so the desired data variable "
+            "cannot be inferred. You must pass the `data_var` kwarg to this operation."
         )
     else:
         data_var = dataset.get(inferred_var, None)
